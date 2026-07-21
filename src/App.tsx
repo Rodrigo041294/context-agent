@@ -352,7 +352,7 @@ function App() {
                 Limpiar historial
               </button>
             </div>
-            <div className="history-list" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+            <div className="history-list" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {history.map((item) => (
                 <div
                   key={item.id}
