@@ -7,7 +7,7 @@ import { SkeletonLoader } from "./components/SkeletonLoader";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { InteractiveContext, GeneratedContext, Task, HistoryItem } from "./types";
 
-const API_URL = "https://z04iljfdsb.execute-api.us-east-1.amazonaws.com/default/context-agent";
+const API_URL = import.meta.env.VITE_API_URL || "https://z04iljfdsb.execute-api.us-east-1.amazonaws.com/default/context-agent";
 
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
