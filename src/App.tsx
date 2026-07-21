@@ -34,7 +34,7 @@ function App() {
       }
     }
   }, []);
-  
+
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
@@ -203,8 +203,8 @@ function App() {
       }
 
       const contextStr = body.generated_context;
-      const parsedContext: GeneratedContext = typeof contextStr === "string" 
-        ? JSON.parse(contextStr) 
+      const parsedContext: GeneratedContext = typeof contextStr === "string"
+        ? JSON.parse(contextStr)
         : contextStr;
 
       if (!parsedContext || !parsedContext.project_name) {
@@ -218,7 +218,7 @@ function App() {
           description: taskText,
           completed: false,
         }));
-        
+
         return {
           area: ws.area,
           specification: ws.specification,
@@ -255,7 +255,7 @@ function App() {
         localStorage.setItem("context_agent_history", JSON.stringify(updated));
         return updated;
       });
-      
+
       showToast("¡Contexto de desarrollo generado exitosamente!");
     } catch (err: any) {
       console.error(err);
@@ -379,9 +379,8 @@ function App() {
               {history.map((item, idx) => (
                 <div
                   key={idx}
-                  className={`history-item-card ${
-                    activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "active" : ""
-                  }`}
+                  className={`history-item-card ${activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "active" : ""
+                    }`}
                   onClick={() => handleLoadHistoryItem(item)}
                   style={{
                     display: "flex",
@@ -398,11 +397,16 @@ function App() {
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
                     <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                      Rama: {item.branch}
+                      {item.branch}
                     </span>
                     <span style={{ fontSize: "0.80rem", color: "hsl(var(--fg-app) / 0.5)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                      HLD: {item.hldPath}
+                      {item.hldPath}
                     </span>
+                    {item.timestamp && (
+                      <span style={{ fontSize: "0.72rem", color: "hsl(var(--fg-app) / 0.4)", marginTop: "2px" }}>
+                        {new Date(item.timestamp).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"

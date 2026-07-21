@@ -440,8 +440,7 @@ describe("Context Agent UI Application", () => {
 
     // 2. We should see the query in the recent history section
     expect(screen.getByTestId("history-section")).toBeInTheDocument();
-    expect(screen.getByText("Rama: develop")).toBeInTheDocument();
-    expect(screen.getByText("HLD: develop-hld.md")).toBeInTheDocument();
+    expect(screen.getByText("develop-hld.md")).toBeInTheDocument();
 
     // 3. Re-submit the exact same combination again, it should load from history instantly and mockFetch should NOT be called again
     mockFetch.mockClear();
@@ -456,7 +455,7 @@ describe("Context Agent UI Application", () => {
     expect(lambdaCallCountAfter).toBe(0);
 
     // 4. Click the history item card to load it directly
-    const historyCard = screen.getByText("Rama: develop");
+    const historyCard = screen.getByText("develop-hld.md");
     fireEvent.click(historyCard);
     expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
 

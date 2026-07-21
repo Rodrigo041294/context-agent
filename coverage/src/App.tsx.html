@@ -30,9 +30,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">77.11% </span>
+                <span class="strong">77.5% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>91/118</span>
+                <span class='fraction'>93/120</span>
             </div>
         
             
@@ -613,7 +613,11 @@
 <a name='L548'></a><a href='#L548'>548</a>
 <a name='L549'></a><a href='#L549'>549</a>
 <a name='L550'></a><a href='#L550'>550</a>
-<a name='L551'></a><a href='#L551'>551</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -996,8 +1000,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1199,7 +1207,7 @@ function App() {
       }
     }
   }, []);
-  
+&nbsp;
   // Toast notifications
   const [toast, setToast] = useState&lt;{ message: string; visible: boolean }&gt;({
     message: "",
@@ -1368,8 +1376,8 @@ function App() {
       }
 &nbsp;
       const contextStr = body.generated_context;
-      const parsedContext: GeneratedContext = typeof contextStr === "string" 
-        ? JSON.parse(contextStr) 
+      const parsedContext: GeneratedContext = typeof contextStr === "string"
+        ? JSON.parse(contextStr)
         : <span class="branch-1 cbranch-no" title="branch not covered" >contextStr;</span>
 &nbsp;
       <span class="missing-if-branch" title="if path not taken" >I</span>if (!parsedContext || !parsedContext.project_name) {
@@ -1383,7 +1391,7 @@ function App() {
           description: taskText,
           completed: false,
         }));
-        
+&nbsp;
         return {
           area: ws.area,
           specification: ws.specification,
@@ -1420,7 +1428,7 @@ function App() {
         localStorage.setItem("context_agent_history", JSON.stringify(updated));
         return updated;
       });
-      
+&nbsp;
       showToast("¡Contexto de desarrollo generado exitosamente!");
     } catch (err: any) {
       console.error(err);
@@ -1544,9 +1552,8 @@ function App() {
               {history.map((item, idx) =&gt; (
                 &lt;div
                   key={idx}
-                  className={`history-item-card ${
-                    activeQuery?.branch === item.branch &amp;&amp; activeQuery?.hldPath === item.hldPath ? "active" : <span class="branch-1 cbranch-no" title="branch not covered" >""</span>
-                  }`}
+                  className={`history-item-card ${activeQuery?.branch === item.branch &amp;&amp; activeQuery?.hldPath === item.hldPath ? "active" : <span class="branch-1 cbranch-no" title="branch not covered" >""</span>
+                    }`}
                   onClick={() =&gt; handleLoadHistoryItem(item)}
                   style={{
                     display: "flex",
@@ -1563,11 +1570,16 @@ function App() {
                 &gt;
                   &lt;div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}&gt;
                     &lt;span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQuery?.branch === item.branch &amp;&amp; activeQuery?.hldPath === item.hldPath ? "hsl(var(--primary))" : <span class="branch-1 cbranch-no" title="branch not covered" >"hsl(var(--fg-app) / 0.8)", w</span>hiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}&gt;
-                      Rama: {item.branch}
+                      {item.branch}
                     &lt;/span&gt;
                     &lt;span style={{ fontSize: "0.80rem", color: "hsl(var(--fg-app) / 0.5)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}&gt;
-                      HLD: {item.hldPath}
+                      {item.hldPath}
                     &lt;/span&gt;
+                    {item.timestamp &amp;&amp; (
+                      &lt;span style={{ fontSize: "0.72rem", color: "hsl(var(--fg-app) / 0.4)", marginTop: "2px" }}&gt;
+                        {new Date(item.timestamp).toLocaleString()}
+                      &lt;/span&gt;
+                    )}
                   &lt;/div&gt;
                   &lt;button
                     type="button"
@@ -1720,7 +1732,7 @@ export default App;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-07-21T15:44:29.861Z
+                at 2026-07-21T15:46:29.296Z
             </div>
         <script src="../prettify.js"></script>
         <script>
