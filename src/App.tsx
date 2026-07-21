@@ -127,20 +127,7 @@ function App() {
     setSelectedBranch(branch);
     setSelectedHldPath(hldPath);
 
-    // Check cache first to avoid Lambda call
-    const cached = history.find(
-      (item) =>
-        item.branch.toLowerCase() === branch.toLowerCase() &&
-        item.hldPath.toLowerCase() === hldPath.toLowerCase()
-    );
 
-    if (cached) {
-      setContext(cached.context);
-      setActiveTabIdx(0);
-      setActiveQuery({ branch, hldPath });
-      showToast("¡Contexto cargado del historial local!");
-      return;
-    }
 
     setIsLoading(true);
     setError(null);

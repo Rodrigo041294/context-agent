@@ -442,7 +442,7 @@ describe("Context Agent UI Application", () => {
     expect(screen.getByTestId("history-section")).toBeInTheDocument();
     expect(screen.getByText("develop-hld.md")).toBeInTheDocument();
 
-    // 3. Re-submit the exact same combination again, it should load from history instantly and mockFetch should NOT be called again
+    // 3. Re-submit the exact same combination again, it should execute the API call again (Form submit always calls Lambda)
     mockFetch.mockClear();
 
     fireEvent.click(submitBtn);
@@ -450,14 +450,19 @@ describe("Context Agent UI Application", () => {
     // Wait for results
     await screen.findByText("Cache Test Project");
 
-    // The API should NOT have been called this time!
-    const lambdaCallCountAfter = mockFetch.mock.calls.filter(call => call[0].includes("amazonaws.com")).length;
-    expect(lambdaCallCountAfter).toBe(0);
+    // The API should have been called again this time
+    const lambdaCallCountAfterSubmit = mockFetch.mock.calls.filter(call => call[0].includes("amazonaws.com")).length;
+    expect(lambdaCallCountAfterSubmit).toBe(1);
 
-    // 4. Click the history item card to load it directly
+    // 4. Click the history item card to load it directly, this should NOT call the Lambda API
+    mockFetch.mockClear();
+    
     const historyCard = screen.getByText("develop-hld.md");
     fireEvent.click(historyCard);
     expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
+
+    const lambdaCallCountAfterCardClick = mockFetch.mock.calls.filter(call => call[0].includes("amazonaws.com")).length;
+    expect(lambdaCallCountAfterCardClick).toBe(0);
 
     // Toggle task to verify history updates task states correctly
     const taskItem = screen.getByTestId("task-item-task-0-0");
