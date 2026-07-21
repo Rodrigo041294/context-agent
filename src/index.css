@@ -9,8 +9,8 @@
   --card-border: 220 13% 91%;
   --card-fg: 224 71% 4%;
   
-  --primary: 221 83% 53%;
-  --primary-hover: 221 83% 45%;
+  --primary: 340 91% 44%;
+  --primary-hover: 340 91% 36%;
   --primary-fg: 210 40% 98%;
   
   --accent: 262 83% 58%; /* Purple accent */
@@ -19,7 +19,7 @@
   
   --input-bg: 0 0% 100%;
   --input-border: 220 13% 86%;
-  --input-focus: 221 83% 53%;
+  --input-focus: 340 91% 44%;
   
   --glass-bg: rgba(255, 255, 255, 0.65);
   --glass-border: rgba(255, 255, 255, 0.4);
@@ -41,9 +41,9 @@
   --card-border: 217 33% 17%;
   --card-fg: 210 40% 98%;
   
-  --primary: 217 91% 60%;
-  --primary-hover: 217 91% 68%;
-  --primary-fg: 224 71% 4%;
+  --primary: 340 91% 55%;
+  --primary-hover: 340 91% 63%;
+  --primary-fg: 210 40% 98%;
   
   --accent: 263 90% 70%;
   --success: 142 76% 45%;
@@ -51,7 +51,7 @@
   
   --input-bg: 224 71% 8%;
   --input-border: 217 33% 17%;
-  --input-focus: 217 91% 60%;
+  --input-focus: 340 91% 55%;
   
   --glass-bg: rgba(10, 15, 30, 0.7);
   --glass-border: rgba(255, 255, 255, 0.08);
