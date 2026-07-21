@@ -457,7 +457,7 @@ describe("Context Agent UI Application", () => {
     // 4. Click the history item card to load it directly, this should NOT call the Lambda API
     mockFetch.mockClear();
     
-    const historyCard = screen.getByText("develop-hld.md");
+    const historyCard = screen.getAllByText("develop-hld.md")[0];
     fireEvent.click(historyCard);
     expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
 
@@ -469,9 +469,17 @@ describe("Context Agent UI Application", () => {
     fireEvent.click(taskItem);
     expect(taskItem).toHaveClass("is-completed");
 
-    // 5. Delete the history item card using individual delete button
-    const deleteBtn = screen.getByRole("button", { name: /Eliminar consulta/i });
-    fireEvent.click(deleteBtn);
+    // 5. Delete the first history item card using individual delete button (we have 2 because of duplicates)
+    const deleteBtns = screen.getAllByRole("button", { name: /Eliminar consulta/i });
+    expect(deleteBtns.length).toBe(2);
+    fireEvent.click(deleteBtns[0]);
+    
+    // There should still be 1 item left in history
+    expect(screen.getByTestId("history-section")).toBeInTheDocument();
+    
+    // Delete the remaining history item card
+    const finalDeleteBtn = screen.getByRole("button", { name: /Eliminar consulta/i });
+    fireEvent.click(finalDeleteBtn);
     expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
 
     // 6. Test clear all history (we add one item back and clear it)

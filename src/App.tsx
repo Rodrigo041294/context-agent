@@ -21,7 +21,7 @@ function App() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedHldPath, setSelectedHldPath] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [activeQuery, setActiveQuery] = useState<{ branch: string; hldPath: string } | null>(null);
+  const [activeQueryId, setActiveQueryId] = useState<string | null>(null);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -219,26 +219,21 @@ function App() {
         workstreams: interactiveWorkstreams,
       };
 
+      const queryId = Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9);
       setContext(contextData);
       setActiveTabIdx(0);
-      setActiveQuery({ branch, hldPath });
+      setActiveQueryId(queryId);
 
-      // Save to history
+      // Save to history (allowing duplicate queries to coexist in history list)
       setHistory((prevHistory) => {
-        const filtered = prevHistory.filter(
-          (item) =>
-            !(
-              item.branch.toLowerCase() === branch.toLowerCase() &&
-              item.hldPath.toLowerCase() === hldPath.toLowerCase()
-            )
-        );
         const newItem: HistoryItem = {
+          id: queryId,
           branch,
           hldPath,
           timestamp: Date.now(),
           context: contextData,
         };
-        const updated = [newItem, ...filtered];
+        const updated = [newItem, ...prevHistory];
         localStorage.setItem("context_agent_history", JSON.stringify(updated));
         return updated;
       });
@@ -272,14 +267,11 @@ function App() {
 
     setContext(updatedContext);
 
-    // Save updated task checklist state to history
-    if (activeQuery) {
+    // Save updated task checklist state to history using the unique ID
+    if (activeQueryId) {
       setHistory((prevHistory) => {
         const updated = prevHistory.map((item) => {
-          if (
-            item.branch.toLowerCase() === activeQuery.branch.toLowerCase() &&
-            item.hldPath.toLowerCase() === activeQuery.hldPath.toLowerCase()
-          ) {
+          if (item.id === activeQueryId) {
             return {
               ...item,
               context: updatedContext,
@@ -298,21 +290,19 @@ function App() {
     setSelectedHldPath(item.hldPath);
     setContext(item.context);
     setActiveTabIdx(0);
-    setActiveQuery({ branch: item.branch, hldPath: item.hldPath });
+    setActiveQueryId(item.id);
     showToast("Consulta cargada del historial");
   };
 
-  const handleDeleteHistoryItem = (branch: string, hldPath: string, e: React.MouseEvent) => {
+  const handleDeleteHistoryItem = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setHistory((prevHistory) => {
-      const updated = prevHistory.filter(
-        (item) => !(item.branch === branch && item.hldPath === hldPath)
-      );
+      const updated = prevHistory.filter((item) => item.id !== id);
       localStorage.setItem("context_agent_history", JSON.stringify(updated));
       return updated;
     });
-    if (activeQuery && activeQuery.branch === branch && activeQuery.hldPath === hldPath) {
-      setActiveQuery(null);
+    if (activeQueryId === id) {
+      setActiveQueryId(null);
     }
     showToast("Consulta eliminada del historial");
   };
@@ -320,7 +310,7 @@ function App() {
   const handleClearHistory = () => {
     setHistory([]);
     localStorage.removeItem("context_agent_history");
-    setActiveQuery(null);
+    setActiveQueryId(null);
     showToast("Historial limpio");
   };
 
@@ -363,11 +353,10 @@ function App() {
               </button>
             </div>
             <div className="history-list" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-              {history.map((item, idx) => (
+              {history.map((item) => (
                 <div
-                  key={idx}
-                  className={`history-item-card ${activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "active" : ""
-                    }`}
+                  key={item.id}
+                  className={`history-item-card ${activeQueryId === item.id ? "active" : ""}`}
                   onClick={() => handleLoadHistoryItem(item)}
                   style={{
                     display: "flex",
@@ -376,14 +365,14 @@ function App() {
                     padding: "12px 16px",
                     borderRadius: "12px",
                     background: "var(--glass-bg)",
-                    border: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "1px solid hsl(var(--primary))" : "1px solid var(--glass-border)",
+                    border: activeQueryId === item.id ? "1px solid hsl(var(--primary))" : "1px solid var(--glass-border)",
                     cursor: "pointer",
                     transition: "var(--transition-fast)",
-                    boxShadow: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "0 0 10px hsl(var(--primary) / 0.1)" : "none"
+                    boxShadow: activeQueryId === item.id ? "0 0 10px hsl(var(--primary) / 0.1)" : "none"
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQueryId === item.id ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                       {item.branch}
                     </span>
                     <span style={{ fontSize: "0.80rem", color: "hsl(var(--fg-app) / 0.5)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
@@ -398,7 +387,7 @@ function App() {
                   <button
                     type="button"
                     className="history-delete-btn"
-                    onClick={(e) => handleDeleteHistoryItem(item.branch, item.hldPath, e)}
+                    onClick={(e) => handleDeleteHistoryItem(item.id, e)}
                     style={{
                       background: "transparent",
                       border: "none",
