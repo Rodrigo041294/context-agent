@@ -804,3 +804,23 @@ body {
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }
+
+/* History Cards Interactive Styles */
+.history-item-card {
+  transition: var(--transition-fast);
+}
+
+.history-item-card:hover {
+  border-color: hsl(var(--primary) / 0.4) !important;
+  background: hsl(var(--primary) / 0.04) !important;
+}
+
+.history-item-card.active:hover {
+  border-color: hsl(var(--primary)) !important;
+  background: var(--glass-bg) !important;
+}
+
+.history-delete-btn:hover {
+  color: hsl(var(--danger)) !important;
+  background: hsl(var(--danger) / 0.1) !important;
+}

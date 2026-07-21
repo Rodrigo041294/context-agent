@@ -33,3 +33,10 @@ export interface ApiPayload {
   branch: string;
   hld_path: string;
 }
+
+export interface HistoryItem {
+  branch: string;
+  hldPath: string;
+  timestamp: number;
+  context: InteractiveContext;
+}

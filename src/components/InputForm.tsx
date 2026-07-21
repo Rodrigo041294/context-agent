@@ -9,6 +9,8 @@ interface InputFormProps {
   isLoading: boolean;
   branches: string[];
   isLoadingBranches: boolean;
+  selectedBranch?: string;
+  selectedHldPath?: string;
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
@@ -16,9 +18,24 @@ export const InputForm: React.FC<InputFormProps> = ({
   isLoading,
   branches,
   isLoadingBranches,
+  selectedBranch = "",
+  selectedHldPath = "",
 }) => {
   const [branch, setBranch] = useState("main");
   const [hldPath, setHldPath] = useState("");
+
+  // Sync state if initial selections change via history clicking
+  useEffect(() => {
+    if (selectedBranch) {
+      setBranch(selectedBranch);
+    }
+  }, [selectedBranch]);
+
+  useEffect(() => {
+    if (selectedHldPath) {
+      setHldPath(selectedHldPath);
+    }
+  }, [selectedHldPath]);
 
   // Load saved values on mount
   useEffect(() => {

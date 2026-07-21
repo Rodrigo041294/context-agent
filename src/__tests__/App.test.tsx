@@ -394,4 +394,99 @@ describe("Context Agent UI Application", () => {
     expect(screen.getByRole("heading", { name: "Area Two" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Area One" })).not.toBeInTheDocument();
   });
+
+  it("should save queries to history and load them locally to skip API calls", async () => {
+    mockContextResponse = {
+      body: JSON.stringify({
+        generated_context: JSON.stringify({
+          project_name: "Cache Test Project",
+          implementation_goal: "Verify cache bypasses api",
+          workstreams: [
+            {
+              area: "Cached Area",
+              specification: "Cached Spec",
+              tasks: ["Cached Task"]
+            }
+          ]
+        })
+      })
+    };
+
+    render(<App />);
+
+    const branchInput = await screen.findByLabelText("Branch");
+    const hldInput = screen.getByLabelText("HLD Path");
+    const submitBtn = screen.getByRole("button", { name: /Generar Contexto/i });
+
+    await waitFor(() => {
+      expect(screen.queryByText("develop")).toBeInTheDocument();
+    });
+
+    // 1. Submit a query for branch "develop" and hld path "develop-hld.md"
+    fireEvent.change(branchInput, { target: { value: "develop" } });
+    fireEvent.change(hldInput, { target: { value: "develop-hld.md" } });
+    
+    // Clear mockFetch mock tracking to check if it's called
+    mockFetch.mockClear();
+
+    fireEvent.click(submitBtn);
+
+    // Wait for the results
+    await screen.findByText("Cache Test Project");
+    
+    // The API should have been called once for this submission
+    const lambdaCallCountBefore = mockFetch.mock.calls.filter(call => call[0].includes("amazonaws.com")).length;
+    expect(lambdaCallCountBefore).toBe(1);
+
+    // 2. We should see the query in the recent history section
+    expect(screen.getByTestId("history-section")).toBeInTheDocument();
+    expect(screen.getByText("Rama: develop")).toBeInTheDocument();
+    expect(screen.getByText("HLD: develop-hld.md")).toBeInTheDocument();
+
+    // 3. Re-submit the exact same combination again, it should load from history instantly and mockFetch should NOT be called again
+    mockFetch.mockClear();
+
+    fireEvent.click(submitBtn);
+
+    // Wait for results
+    await screen.findByText("Cache Test Project");
+
+    // The API should NOT have been called this time!
+    const lambdaCallCountAfter = mockFetch.mock.calls.filter(call => call[0].includes("amazonaws.com")).length;
+    expect(lambdaCallCountAfter).toBe(0);
+
+    // 4. Click the history item card to load it directly
+    const historyCard = screen.getByText("Rama: develop");
+    fireEvent.click(historyCard);
+    expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
+
+    // Toggle task to verify history updates task states correctly
+    const taskItem = screen.getByTestId("task-item-task-0-0");
+    fireEvent.click(taskItem);
+    expect(taskItem).toHaveClass("is-completed");
+
+    // 5. Delete the history item card using individual delete button
+    const deleteBtn = screen.getByRole("button", { name: /Eliminar consulta/i });
+    fireEvent.click(deleteBtn);
+    expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
+
+    // 6. Test clear all history (we add one item back and clear it)
+    mockContextResponse = {
+      body: JSON.stringify({
+        generated_context: JSON.stringify({
+          project_name: "Clear Test Project",
+          implementation_goal: "Verify clear history works",
+          workstreams: [{ area: "Clear Area", specification: "Clear Spec", tasks: ["Clear Task"] }]
+        })
+      })
+    };
+    fireEvent.change(branchInput, { target: { value: "main" } });
+    fireEvent.change(hldInput, { target: { value: "clear-hld.md" } });
+    fireEvent.click(submitBtn);
+    await screen.findByText("Clear Test Project");
+
+    const clearBtn = screen.getByRole("button", { name: "Limpiar historial" });
+    fireEvent.click(clearBtn);
+    expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
+  });
 });

@@ -5,7 +5,7 @@ import { WorkstreamCard } from "./components/WorkstreamCard";
 import { ExportPanel } from "./components/ExportPanel";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
-import type { InteractiveContext, GeneratedContext, Task } from "./types";
+import type { InteractiveContext, GeneratedContext, Task, HistoryItem } from "./types";
 
 const API_URL = "https://z04iljfdsb.execute-api.us-east-1.amazonaws.com/default/context-agent";
 
@@ -18,6 +18,22 @@ function App() {
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "tabs">("tabs");
   const [activeTabIdx, setActiveTabIdx] = useState(0);
+  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedHldPath, setSelectedHldPath] = useState("");
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [activeQuery, setActiveQuery] = useState<{ branch: string; hldPath: string } | null>(null);
+
+  // Load history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem("context_agent_history");
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.warn("Failed to parse history", e);
+      }
+    }
+  }, []);
   
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
@@ -105,6 +121,27 @@ function App() {
     branch: string;
     hldPath: string;
   }) => {
+    const branch = formData.branch.trim();
+    const hldPath = formData.hldPath.trim();
+
+    setSelectedBranch(branch);
+    setSelectedHldPath(hldPath);
+
+    // Check cache first to avoid Lambda call
+    const cached = history.find(
+      (item) =>
+        item.branch.toLowerCase() === branch.toLowerCase() &&
+        item.hldPath.toLowerCase() === hldPath.toLowerCase()
+    );
+
+    if (cached) {
+      setContext(cached.context);
+      setActiveTabIdx(0);
+      setActiveQuery({ branch, hldPath });
+      showToast("¡Contexto cargado del historial local!");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setContext(null);
@@ -189,12 +226,35 @@ function App() {
         };
       });
 
-      setContext({
+      const contextData: InteractiveContext = {
         projectName: parsedContext.project_name,
         implementationGoal: parsedContext.implementation_goal,
         workstreams: interactiveWorkstreams,
-      });
+      };
+
+      setContext(contextData);
       setActiveTabIdx(0);
+      setActiveQuery({ branch, hldPath });
+
+      // Save to history
+      setHistory((prevHistory) => {
+        const filtered = prevHistory.filter(
+          (item) =>
+            !(
+              item.branch.toLowerCase() === branch.toLowerCase() &&
+              item.hldPath.toLowerCase() === hldPath.toLowerCase()
+            )
+        );
+        const newItem: HistoryItem = {
+          branch,
+          hldPath,
+          timestamp: Date.now(),
+          context: contextData,
+        };
+        const updated = [newItem, ...filtered];
+        localStorage.setItem("context_agent_history", JSON.stringify(updated));
+        return updated;
+      });
       
       showToast("¡Contexto de desarrollo generado exitosamente!");
     } catch (err: any) {
@@ -218,10 +278,63 @@ function App() {
       return { ...ws, tasks: updatedTasks };
     });
 
-    setContext({
+    const updatedContext = {
       ...context,
       workstreams: updatedWorkstreams,
+    };
+
+    setContext(updatedContext);
+
+    // Save updated task checklist state to history
+    if (activeQuery) {
+      setHistory((prevHistory) => {
+        const updated = prevHistory.map((item) => {
+          if (
+            item.branch.toLowerCase() === activeQuery.branch.toLowerCase() &&
+            item.hldPath.toLowerCase() === activeQuery.hldPath.toLowerCase()
+          ) {
+            return {
+              ...item,
+              context: updatedContext,
+            };
+          }
+          return item;
+        });
+        localStorage.setItem("context_agent_history", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
+  const handleLoadHistoryItem = (item: HistoryItem) => {
+    setSelectedBranch(item.branch);
+    setSelectedHldPath(item.hldPath);
+    setContext(item.context);
+    setActiveTabIdx(0);
+    setActiveQuery({ branch: item.branch, hldPath: item.hldPath });
+    showToast("Consulta cargada del historial");
+  };
+
+  const handleDeleteHistoryItem = (branch: string, hldPath: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHistory((prevHistory) => {
+      const updated = prevHistory.filter(
+        (item) => !(item.branch === branch && item.hldPath === hldPath)
+      );
+      localStorage.setItem("context_agent_history", JSON.stringify(updated));
+      return updated;
     });
+    if (activeQuery && activeQuery.branch === branch && activeQuery.hldPath === hldPath) {
+      setActiveQuery(null);
+    }
+    showToast("Consulta eliminada del historial");
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem("context_agent_history");
+    setActiveQuery(null);
+    showToast("Historial limpio");
   };
 
   return (
@@ -236,7 +349,86 @@ function App() {
           isLoading={isLoading}
           branches={branches}
           isLoadingBranches={isLoadingBranches}
+          selectedBranch={selectedBranch}
+          selectedHldPath={selectedHldPath}
         />
+
+        {/* Query History Panel */}
+        {history.length > 0 && (
+          <div className="glass-card history-section fade-in" data-testid="history-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontFamily: "var(--font-title)", fontWeight: 700, fontSize: "1.1rem" }}>Consultas Recientes</h3>
+              <button
+                type="button"
+                className="btn-link-danger"
+                onClick={handleClearHistory}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "hsl(var(--danger))",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-title)"
+                }}
+              >
+                Limpiar historial
+              </button>
+            </div>
+            <div className="history-list" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+              {history.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`history-item-card ${
+                    activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "active" : ""
+                  }`}
+                  onClick={() => handleLoadHistoryItem(item)}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    background: "var(--glass-bg)",
+                    border: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "1px solid hsl(var(--primary))" : "1px solid var(--glass-border)",
+                    cursor: "pointer",
+                    transition: "var(--transition-fast)",
+                    boxShadow: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "0 0 10px hsl(var(--primary) / 0.1)" : "none"
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQuery?.branch === item.branch && activeQuery?.hldPath === item.hldPath ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                      Rama: {item.branch}
+                    </span>
+                    <span style={{ fontSize: "0.80rem", color: "hsl(var(--fg-app) / 0.5)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                      HLD: {item.hldPath}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="history-delete-btn"
+                    onClick={(e) => handleDeleteHistoryItem(item.branch, item.hldPath, e)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "hsl(var(--fg-app) / 0.4)",
+                      cursor: "pointer",
+                      fontSize: "1.1rem",
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      lineHeight: "1",
+                      transition: "var(--transition-fast)"
+                    }}
+                    title="Eliminar del historial"
+                    aria-label={`Eliminar consulta de rama ${item.branch} y ruta ${item.hldPath}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Loading placeholder skeleton */}
         {isLoading && <SkeletonLoader />}
