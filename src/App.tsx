@@ -6,6 +6,7 @@ import { ExportPanel } from "./components/ExportPanel";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { InteractiveContext, GeneratedContext, Task, HistoryItem } from "./types";
+import { fetchOAuthToken } from "./services/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://z04iljfdsb.execute-api.us-east-1.amazonaws.com/default/context-agent";
 
@@ -135,13 +136,16 @@ function App() {
 
     try {
       const repository = (import.meta.env.VITE_REPOSITORY || "").trim();
-      const accessToken = (import.meta.env.VITE_ACCESS_TOKEN || "").trim();
+      const envAccessToken = (import.meta.env.VITE_ACCESS_TOKEN || "").trim();
 
       if (!repository) {
         throw new Error(
           "La variable de entorno VITE_REPOSITORY no está configurada. Por favor, confígurala en tu archivo .env."
         );
       }
+
+      // Consumir el endpoint de Cognito OAuth2 antes de generar contexto
+      const authToken = await fetchOAuthToken();
 
       const payload = {
         repository,
@@ -153,10 +157,11 @@ function App() {
         "Content-Type": "application/json",
       };
 
-      if (accessToken) {
-        headers["Authorization"] = accessToken.startsWith("Bearer ")
-          ? accessToken
-          : `Bearer ${accessToken}`;
+      const finalToken = authToken || envAccessToken;
+      if (finalToken) {
+        headers["Authorization"] = finalToken.startsWith("Bearer ")
+          ? finalToken
+          : `Bearer ${finalToken}`;
       }
 
       const response = await fetch(API_URL, {
@@ -172,7 +177,7 @@ function App() {
           if (errorData && errorData.message) {
             errorMessage = errorData.message;
           }
-        } catch (_) {
+        } catch {
           // Fallback if not JSON
         }
         throw new Error(errorMessage);

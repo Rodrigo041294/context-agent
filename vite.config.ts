@@ -12,7 +12,7 @@ export default defineConfig({
     // default) that is undefined without --localstorage-file. Vitest's jsdom environment
     // only overrides globals it doesn't already find on `global`, so the native stub
     // wins over jsdom's working implementation unless disabled here.
-    execArgv: ['--no-experimental-webstorage'],
+    execArgv: Number(process.versions.node.split('.')[0]) >= 26 ? ['--no-experimental-webstorage'] : [],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'lcov', 'html'],

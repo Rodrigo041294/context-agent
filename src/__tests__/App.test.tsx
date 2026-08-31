@@ -19,6 +19,13 @@ Object.defineProperty(navigator, "clipboard", {
 const mockCreateObjectURL = vi.fn().mockReturnValue("blob:http://localhost/test");
 
 // Smart Mock Variables
+let mockCognitoResponse: any = {
+  access_token: "mock-cognito-access-token",
+  token_type: "Bearer",
+  expires_in: 3600,
+};
+let mockCognitoOk = true;
+let mockCognitoStatus = 200;
 let mockContextResponse: any = {};
 let mockContextOk = true;
 let mockContextStatus = 200;
@@ -36,12 +43,22 @@ describe("Context Agent UI Application", () => {
     localStorage.clear();
     vi.stubEnv("VITE_REPOSITORY", "my-user/my-repo");
     vi.stubEnv("VITE_ACCESS_TOKEN", "custom-token-secret");
+    vi.stubEnv("VITE_AUTH_USER", "mock-user");
+    vi.stubEnv("VITE_AUTH_PASSWORD", "mock-password");
+    vi.stubEnv("VITE_AUTH_URL", "https://us-east-1qut4lhkwo.auth.us-east-1.amazoncognito.com/oauth2/token");
     vi.stubGlobal("URL", {
       createObjectURL: mockCreateObjectURL,
       revokeObjectURL: vi.fn(),
     });
 
     // Reset default mock states
+    mockCognitoResponse = {
+      access_token: "mock-cognito-access-token",
+      token_type: "Bearer",
+      expires_in: 3600,
+    };
+    mockCognitoOk = true;
+    mockCognitoStatus = 200;
     mockContextResponse = {};
     mockContextOk = true;
     mockContextStatus = 200;
@@ -66,6 +83,21 @@ describe("Context Agent UI Application", () => {
         return {
           ok: true,
           json: async () => mockBranchesResponse,
+        };
+      }
+
+      if (url.includes("/oauth2/token") || url.includes("amazoncognito.com")) {
+        if (!mockCognitoOk) {
+          return {
+            ok: false,
+            status: mockCognitoStatus,
+            json: async () => mockCognitoResponse,
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockCognitoResponse,
         };
       }
       
@@ -501,4 +533,100 @@ describe("Context Agent UI Application", () => {
     fireEvent.click(clearBtn);
     expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
   });
+
+  it("should consume Cognito OAuth2 token endpoint before generating context and send Bearer token in context request", async () => {
+    mockCognitoResponse = {
+      access_token: "test-cognito-bearer-token-999",
+      token_type: "Bearer",
+      expires_in: 3600,
+    };
+
+    mockContextResponse = {
+      body: JSON.stringify({
+        generated_context: JSON.stringify({
+          project_name: "Cognito Auth Test",
+          implementation_goal: "Verify token flow",
+          workstreams: [
+            {
+              area: "Auth Area",
+              specification: "Specs",
+              tasks: ["Task 1"],
+            },
+          ],
+        }),
+      }),
+    };
+
+    render(<App />);
+
+    const branchInput = await screen.findByLabelText("Branch");
+    const hldInput = screen.getByLabelText("HLD Path");
+    const submitBtn = screen.getByRole("button", { name: /Generar Contexto/i });
+
+    await waitFor(() => {
+      expect(screen.queryByText("develop")).toBeInTheDocument();
+    });
+
+    fireEvent.change(branchInput, { target: { value: "main" } });
+    fireEvent.change(hldInput, { target: { value: "auth-hld.md" } });
+
+    mockFetch.mockClear();
+
+    fireEvent.click(submitBtn);
+
+    await screen.findByText("Cognito Auth Test");
+
+    // 1. Verify Cognito OAuth2 call
+    const cognitoCalls = mockFetch.mock.calls.filter((call) =>
+      call[0].includes("amazoncognito.com") || call[0].includes("/oauth2/token")
+    );
+    expect(cognitoCalls.length).toBe(1);
+    const [cognitoUrl, cognitoOptions] = cognitoCalls[0];
+    expect(cognitoUrl).toBe("https://us-east-1qut4lhkwo.auth.us-east-1.amazoncognito.com/oauth2/token");
+    expect(cognitoOptions.method).toBe("POST");
+    expect(cognitoOptions.headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
+    expect(cognitoOptions.headers["Authorization"]).toBe(`Basic ${btoa("mock-user:mock-password")}`);
+    expect(cognitoOptions.body).toBe("grant_type=client_credentials");
+
+    // 2. Verify Context Agent call has Bearer token from Cognito
+    const contextCalls = mockFetch.mock.calls.filter((call) =>
+      call[0].includes("amazonaws.com") && !call[0].includes("amazoncognito.com")
+    );
+    expect(contextCalls.length).toBe(1);
+    const [, contextOptions] = contextCalls[0];
+    expect(contextOptions.headers["Authorization"]).toBe("Bearer test-cognito-bearer-token-999");
+  });
+
+  it("should show an error banner when Cognito authentication fails", async () => {
+    mockCognitoOk = false;
+    mockCognitoStatus = 401;
+    mockCognitoResponse = {
+      error: "invalid_client",
+      error_description: "Client credentials are invalid",
+    };
+
+    render(<App />);
+
+    const branchInput = await screen.findByLabelText("Branch");
+    const hldInput = screen.getByLabelText("HLD Path");
+    const submitBtn = screen.getByRole("button", { name: /Generar Contexto/i });
+
+    await waitFor(() => {
+      expect(screen.queryByText("develop")).toBeInTheDocument();
+    });
+
+    fireEvent.change(branchInput, { target: { value: "main" } });
+    fireEvent.change(hldInput, { target: { value: "auth-fail.md" } });
+
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("error-banner")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/Fallo en autenticación Cognito: Client credentials are invalid/i)
+    ).toBeInTheDocument();
+  });
 });
+
