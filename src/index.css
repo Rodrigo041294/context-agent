@@ -362,6 +362,32 @@ body {
   transform: none;
 }
 
+/* Link-style button — a secondary/tertiary action, not a primary CTA */
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  font-family: var(--font-title);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--fg-app) / 0.55);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-link:hover {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn-link.is-active {
+  color: hsl(var(--primary));
+}
+
 /* Resultados & Dashboard */
 .results-section {
   display: flex;
@@ -823,4 +849,46 @@ body {
 .history-delete-btn:hover {
   color: hsl(var(--danger)) !important;
   background: hsl(var(--danger) / 0.1) !important;
+}
+
+/* Spin utility for inline Loader2 icons (form + generation progress) */
+.animate-spin {
+  animation: spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Generation Progress — reuses the results summary card + progress bar so both
+   loading states read as the same component family. */
+.gen-progress-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.gen-progress-head .animate-spin {
+  color: hsl(var(--primary));
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.gen-progress .progress-container {
+  margin: 20px 0 0;
+}
+
+/* Reuse the skeleton's breathing cue so both loaders read as one family */
+.gen-progress .progress-bar-fill {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .gen-progress .progress-bar-fill {
+    animation: none;
+  }
 }

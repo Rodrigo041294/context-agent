@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, History } from "lucide-react";
 
 interface InputFormProps {
   onSubmit: (data: {
@@ -11,7 +11,15 @@ interface InputFormProps {
   isLoadingBranches: boolean;
   selectedBranch?: string;
   selectedHldPath?: string;
+  historyCount?: number;
+  historyOpen?: boolean;
+  onToggleHistory?: () => void;
 }
+
+const DEFAULT_HLD_PATH = "projects/IA_Framework/hld.md";
+// Legacy placeholder that was persisted before IA_Framework became the canonical
+// path. Treat it as "no saved value" so the current default wins.
+const LEGACY_HLD_DEFAULTS = ["projects/hld.md"];
 
 export const InputForm: React.FC<InputFormProps> = ({
   onSubmit,
@@ -20,9 +28,12 @@ export const InputForm: React.FC<InputFormProps> = ({
   isLoadingBranches,
   selectedBranch = "",
   selectedHldPath = "",
+  historyCount = 0,
+  historyOpen = false,
+  onToggleHistory,
 }) => {
   const [branch, setBranch] = useState("main");
-  const [hldPath, setHldPath] = useState("");
+  const [hldPath, setHldPath] = useState(DEFAULT_HLD_PATH);
 
   // Sync state if initial selections change via history clicking
   useEffect(() => {
@@ -43,7 +54,9 @@ export const InputForm: React.FC<InputFormProps> = ({
     const savedHldPath = localStorage.getItem("context_agent_hld");
 
     if (savedBranch) setBranch(savedBranch);
-    if (savedHldPath) setHldPath(savedHldPath);
+    if (savedHldPath && !LEGACY_HLD_DEFAULTS.includes(savedHldPath)) {
+      setHldPath(savedHldPath);
+    }
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -118,7 +131,7 @@ export const InputForm: React.FC<InputFormProps> = ({
               id="hldPath"
               type="text"
               className="input-premium"
-              placeholder="projects/hld.md"
+              placeholder={DEFAULT_HLD_PATH}
               value={hldPath}
               onChange={(e) => setHldPath(e.target.value)}
               disabled={isLoading}
@@ -128,7 +141,30 @@ export const InputForm: React.FC<InputFormProps> = ({
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: "20px",
+          marginTop: "16px",
+          flexWrap: "wrap",
+        }}
+      >
+        {onToggleHistory && historyCount > 0 && (
+          <button
+            type="button"
+            className={`btn-link ${historyOpen ? "is-active" : ""}`}
+            onClick={onToggleHistory}
+            aria-pressed={historyOpen}
+            aria-expanded={historyOpen}
+            aria-controls="history-section"
+          >
+            <History size={15} />
+            {historyOpen ? "Ocultar historial" : "Ver historial"} ({historyCount})
+          </button>
+        )}
+
         {/* Action Button */}
         <button
           type="submit"

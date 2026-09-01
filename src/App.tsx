@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "./components/Header";
 import { InputForm } from "./components/InputForm";
 import { WorkstreamCard } from "./components/WorkstreamCard";
 import { ExportPanel } from "./components/ExportPanel";
 import { SkeletonLoader } from "./components/SkeletonLoader";
+import { GenerationProgress, type GenerationPhase } from "./components/GenerationProgress";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { InteractiveContext, GeneratedContext, Task, HistoryItem } from "./types";
-import { fetchOAuthToken } from "./services/auth";
-
-const API_URL = import.meta.env.VITE_API_URL || "https://z04iljfdsb.execute-api.us-east-1.amazonaws.com/default/context-agent";
+import { createJob, pollJobUntilDone } from "./services/jobs";
 
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -23,6 +22,14 @@ function App() {
   const [selectedHldPath, setSelectedHldPath] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeQueryId, setActiveQueryId] = useState<string | null>(null);
+  const [genPhase, setGenPhase] = useState<GenerationPhase | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight polling when the component unmounts
+  useEffect(() => {
+    return () => pollAbortRef.current?.abort();
+  }, []);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -130,74 +137,35 @@ function App() {
 
 
 
+    // Cancel any previous polling still running
+    pollAbortRef.current?.abort();
+    const abortController = new AbortController();
+    pollAbortRef.current = abortController;
+
     setIsLoading(true);
     setError(null);
     setContext(null);
+    setGenPhase("CREATING");
 
     try {
-      const repository = (import.meta.env.VITE_REPOSITORY || "").trim();
-      const envAccessToken = (import.meta.env.VITE_ACCESS_TOKEN || "").trim();
+      // 1-3) Token (obtenido y reutilizado por el servicio) + creación del job
+      // El repositorio es fijo (FIXED_REPOSITORY), sólo branch y hld_path vienen del form
+      const { jobId } = await createJob({ branch, hldPath });
+      setGenPhase("PENDING");
 
-      if (!repository) {
-        throw new Error(
-          "La variable de entorno VITE_REPOSITORY no está configurada. Por favor, confígurala en tu archivo .env."
-        );
-      }
-
-      // Consumir el endpoint de Cognito OAuth2 antes de generar contexto
-      const authToken = await fetchOAuthToken();
-
-      const payload = {
-        repository,
-        branch: formData.branch.trim(),
-        hld_path: formData.hldPath.trim(),
-      };
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      const finalToken = authToken || envAccessToken;
-      if (finalToken) {
-        headers["Authorization"] = finalToken.startsWith("Bearer ")
-          ? finalToken
-          : `Bearer ${finalToken}`;
-      }
-
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
+      // 4) Polling: cada 3s en PENDING, cada 10s en RUNNING, hasta COMPLETED/FAILED
+      const job = await pollJobUntilDone(jobId, {
+        signal: abortController.signal,
+        onUpdate: (j) => setGenPhase(j.status),
       });
 
-      if (!response.ok) {
-        let errorMessage = `Error HTTP! Estado: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.message) {
-            errorMessage = errorData.message;
-          }
-        } catch {
-          // Fallback if not JSON
-        }
-        throw new Error(errorMessage);
+      if (job.status === "FAILED") {
+        throw new Error(job.errorMessage || "El job de generación de contexto falló.");
       }
 
-      const apiResponse = await response.json();
-
-      let body = apiResponse;
-      if (apiResponse && typeof apiResponse.body === "string") {
-        try {
-          body = JSON.parse(apiResponse.body);
-        } catch (e) {
-          console.warn("Failed to parse apiResponse.body as JSON", e);
-        }
-      }
-
-      const contextStr = body.generated_context;
-      const parsedContext: GeneratedContext = typeof contextStr === "string"
-        ? JSON.parse(contextStr)
-        : contextStr;
+      const contextStr = job.generatedContext;
+      const parsedContext: GeneratedContext | undefined =
+        typeof contextStr === "string" ? JSON.parse(contextStr) : undefined;
 
       if (!parsedContext || !parsedContext.project_name) {
         throw new Error("La API devolvió un formato de respuesta inválido.");
@@ -245,10 +213,20 @@ function App() {
 
       showToast("¡Contexto de desarrollo generado exitosamente!");
     } catch (err: any) {
+      // Polling cancelled (new submission or unmount) — not a real error
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        return;
+      }
       console.error(err);
       setError(err.message || "Error desconocido al generar contexto.");
     } finally {
-      setIsLoading(false);
+      if (pollAbortRef.current === abortController) {
+        pollAbortRef.current = null;
+      }
+      if (!abortController.signal.aborted) {
+        setIsLoading(false);
+        setGenPhase(null);
+      }
     }
   };
 
@@ -333,11 +311,14 @@ function App() {
           isLoadingBranches={isLoadingBranches}
           selectedBranch={selectedBranch}
           selectedHldPath={selectedHldPath}
+          historyCount={history.length}
+          historyOpen={showHistory}
+          onToggleHistory={() => setShowHistory((v) => !v)}
         />
 
         {/* Query History Panel */}
-        {history.length > 0 && (
-          <div className="glass-card history-section fade-in" data-testid="history-section">
+        {showHistory && history.length > 0 && (
+          <div id="history-section" className="glass-card history-section fade-in" data-testid="history-section">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ fontFamily: "var(--font-title)", fontWeight: 700, fontSize: "1.1rem" }}>Consultas Recientes</h3>
               <button
@@ -415,8 +396,13 @@ function App() {
           </div>
         )}
 
-        {/* Loading placeholder skeleton */}
-        {isLoading && <SkeletonLoader />}
+        {/* Animated generation progress + skeleton placeholder */}
+        {isLoading && (
+          <>
+            {genPhase && <GenerationProgress phase={genPhase} />}
+            <SkeletonLoader />
+          </>
+        )}
 
         {/* Error notification */}
         {error && (
