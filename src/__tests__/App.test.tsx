@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { clearTokenCache } from "../services/auth";
 
@@ -249,9 +249,7 @@ describe("Context Agent UI Application", () => {
 
     expect(screen.getByTestId("skeleton-loader")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByText("Premium Test Project")).toBeInTheDocument();
-    });
+    await screen.findByRole("heading", { name: "Premium Test Project", level: 2 });
 
     expect(screen.getByText("Build a state-of-the-art context tool")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Frontend Refactoring" })).toBeInTheDocument();
@@ -415,7 +413,7 @@ describe("Context Agent UI Application", () => {
     fireEvent.change(hldInput, { target: { value: "hld.md" } });
     fireEvent.click(submitBtn);
 
-    await screen.findByText("Tab and Grid Test");
+    await screen.findByRole("heading", { name: "Tab and Grid Test", level: 2 });
 
     expect(screen.getByRole("heading", { name: "Area One" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Area Two" })).not.toBeInTheDocument();
@@ -463,7 +461,7 @@ describe("Context Agent UI Application", () => {
     mockFetch.mockClear();
     fireEvent.click(submitBtn);
 
-    await screen.findByText("Cache Test Project");
+    await screen.findByRole("heading", { name: "Cache Test Project", level: 2 });
 
     // First submission: create + at least one poll GET
     expect(jobsCalls().length).toBeGreaterThanOrEqual(2);
@@ -480,7 +478,7 @@ describe("Context Agent UI Application", () => {
     // Re-submit: hits the jobs API again, but reuses the cached token
     mockFetch.mockClear();
     fireEvent.click(submitBtn);
-    await screen.findByText("Cache Test Project");
+    await screen.findByRole("heading", { name: "Cache Test Project", level: 2 });
 
     expect(jobsCalls().length).toBeGreaterThanOrEqual(2);
     expect(cognitoCalls().length).toBe(0);
@@ -489,7 +487,7 @@ describe("Context Agent UI Application", () => {
     mockFetch.mockClear();
     const historyCard = screen.getAllByText("develop-hld.md")[0];
     fireEvent.click(historyCard);
-    expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cache Test Project", level: 2 })).toBeInTheDocument();
     expect(jobsCalls().length).toBe(0);
 
     const featureToggle = screen.getByTestId("feature-toggle-c0-f0");
@@ -514,7 +512,7 @@ describe("Context Agent UI Application", () => {
     fireEvent.change(branchInput, { target: { value: "main" } });
     fireEvent.change(hldInput, { target: { value: "clear-hld.md" } });
     fireEvent.click(submitBtn);
-    await screen.findByText("Clear Test Project");
+    await screen.findByRole("heading", { name: "Clear Test Project", level: 2 });
 
     fireEvent.click(screen.getByRole("button", { name: "Limpiar historial" }));
     expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
@@ -544,7 +542,7 @@ describe("Context Agent UI Application", () => {
     fireEvent.change(branchInput, { target: { value: "main" } });
     fireEvent.change(hldInput, { target: { value: "toggle.md" } });
     fireEvent.click(submitBtn);
-    await screen.findByText("Toggle Test");
+    await screen.findByRole("heading", { name: "Toggle Test", level: 2 });
 
     // Toggle button appears but the panel is still hidden
     const toggleBtn = screen.getByRole("button", { name: /Ver historial/i });
@@ -556,6 +554,60 @@ describe("Context Agent UI Application", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Ocultar historial/i }));
     expect(screen.queryByTestId("history-section")).not.toBeInTheDocument();
+  });
+
+  it("should open one project tab per generation and switch/close between them", async () => {
+    render(<App />);
+
+    const branchInput = await screen.findByLabelText("Branch");
+    const hldInput = screen.getByLabelText("HLD Path");
+    const submitBtn = screen.getByRole("button", { name: /Generar Contexto/i });
+
+    await waitFor(() => {
+      expect(screen.queryByText("develop")).toBeInTheDocument();
+    });
+
+    // Generate project A
+    mockJob = completedJob({
+      project_name: "Project A",
+      implementation_goal: "goal A",
+      components: [comp("Comp A", [feat("Feat A", ["crit A"])])],
+    });
+    fireEvent.change(branchInput, { target: { value: "main" } });
+    fireEvent.change(hldInput, { target: { value: "a.md" } });
+    fireEvent.click(submitBtn);
+    await screen.findByRole("heading", { name: "Project A", level: 2 });
+
+    // Generate project B
+    mockJob = completedJob({
+      project_name: "Project B",
+      implementation_goal: "goal B",
+      components: [comp("Comp B", [feat("Feat B", ["crit B"])])],
+    });
+    fireEvent.change(branchInput, { target: { value: "develop" } });
+    fireEvent.change(hldInput, { target: { value: "b.md" } });
+    fireEvent.click(submitBtn);
+    await screen.findByRole("heading", { name: "Project B", level: 2 });
+
+    // Two tabs open, B is active
+    const tabBar = screen.getByTestId("project-tabs");
+    expect(within(tabBar).getByText("Project A")).toBeInTheDocument();
+    expect(within(tabBar).getByText("Project B")).toBeInTheDocument();
+
+    // Switch back to A
+    fireEvent.click(within(tabBar).getByText("Project A"));
+    expect(screen.getByRole("heading", { name: "Project A", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Project B", level: 2 })).not.toBeInTheDocument();
+
+    // Close A -> falls back to B
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar pestaña Project A/i }));
+    expect(within(tabBar).queryByText("Project A")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Project B", level: 2 })).toBeInTheDocument();
+
+    // Both still in history
+    fireEvent.click(screen.getByRole("button", { name: /Ver historial/i }));
+    expect(screen.getByText("a.md")).toBeInTheDocument();
+    expect(screen.getByText("b.md")).toBeInTheDocument();
   });
 
   it("should request a Cognito token and send it as Bearer on the jobs requests", async () => {
@@ -586,7 +638,7 @@ describe("Context Agent UI Application", () => {
     mockFetch.mockClear();
     fireEvent.click(submitBtn);
 
-    await screen.findByText("Cognito Auth Test");
+    await screen.findByRole("heading", { name: "Cognito Auth Test", level: 2 });
 
     const cognito = cognitoCalls();
     expect(cognito.length).toBe(1);

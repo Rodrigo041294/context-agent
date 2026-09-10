@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Header } from "./components/Header";
 import { InputForm } from "./components/InputForm";
 import { ComponentCard } from "./components/ComponentCard";
+import { ProjectTabs } from "./components/ProjectTabs";
 import { ExportPanel } from "./components/ExportPanel";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { GenerationProgress, type GenerationPhase } from "./components/GenerationProgress";
@@ -15,11 +16,14 @@ import type {
 import { componentStats } from "./utils";
 import { createJob, pollJobUntilDone } from "./services/jobs";
 
+const HISTORY_KEY = "context_agent_history";
+const OPEN_TABS_KEY = "context_agent_open_tabs";
+const ACTIVE_TAB_KEY = "context_agent_active_tab";
+
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [context, setContext] = useState<InteractiveContext | null>(null);
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "tabs">("tabs");
@@ -27,36 +31,84 @@ function App() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedHldPath, setSelectedHldPath] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [activeQueryId, setActiveQueryId] = useState<string | null>(null);
+  // Multi-project workspace: which history entries are open as tabs, and which is active
+  const [openProjectIds, setOpenProjectIds] = useState<string[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [genPhase, setGenPhase] = useState<GenerationPhase | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const pollAbortRef = useRef<AbortController | null>(null);
+
+  // Derived: open project tabs + the active project's context
+  const openProjects = openProjectIds
+    .map((id) => history.find((h) => h.id === id))
+    .filter((h): h is HistoryItem => Boolean(h));
+  const activeProject = history.find((h) => h.id === activeProjectId) ?? null;
+  const context: InteractiveContext | null = activeProject?.context ?? null;
 
   // Abort any in-flight polling when the component unmounts
   useEffect(() => {
     return () => pollAbortRef.current?.abort();
   }, []);
 
-  // Load history from localStorage on mount
+  // Load history + open tabs from localStorage on mount
   useEffect(() => {
-    const savedHistory = localStorage.getItem("context_agent_history");
+    let compatible: HistoryItem[] = [];
+    const savedHistory = localStorage.getItem(HISTORY_KEY);
     if (savedHistory) {
       try {
         const parsed: HistoryItem[] = JSON.parse(savedHistory);
         // Drop entries saved with the old workstreams schema so the new
         // components/features UI never receives an incompatible shape.
-        const compatible = Array.isArray(parsed)
+        compatible = Array.isArray(parsed)
           ? parsed.filter((item) => Array.isArray(item?.context?.components))
           : [];
-        setHistory(compatible);
         if (compatible.length !== parsed.length) {
-          localStorage.setItem("context_agent_history", JSON.stringify(compatible));
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(compatible));
         }
       } catch (e) {
         console.warn("Failed to parse history", e);
       }
     }
+    setHistory(compatible);
+
+    const validIds = new Set(compatible.map((h) => h.id));
+
+    let openIds: string[] = [];
+    try {
+      const savedTabs = JSON.parse(localStorage.getItem(OPEN_TABS_KEY) || "[]");
+      if (Array.isArray(savedTabs)) {
+        openIds = savedTabs.filter((id: unknown): id is string => typeof id === "string" && validIds.has(id));
+      }
+    } catch {
+      /* ignore malformed tab list */
+    }
+    setOpenProjectIds(openIds);
+
+    const savedActive = localStorage.getItem(ACTIVE_TAB_KEY);
+    const active =
+      savedActive && validIds.has(savedActive) ? savedActive : openIds[0] ?? null;
+    setActiveProjectId(active);
+
+    const activeItem = active ? compatible.find((h) => h.id === active) : undefined;
+    if (activeItem) {
+      setSelectedBranch(activeItem.branch);
+      setSelectedHldPath(activeItem.hldPath);
+    }
+
+    setHydrated(true);
   }, []);
+
+  // Persist the workspace (open tabs + active tab) after hydration
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(openProjectIds));
+    if (activeProjectId) {
+      localStorage.setItem(ACTIVE_TAB_KEY, activeProjectId);
+    } else {
+      localStorage.removeItem(ACTIVE_TAB_KEY);
+    }
+  }, [hydrated, openProjectIds, activeProjectId]);
 
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
@@ -159,7 +211,6 @@ function App() {
 
     setIsLoading(true);
     setError(null);
-    setContext(null);
     setGenPhase("CREATING");
 
     try {
@@ -211,9 +262,6 @@ function App() {
       };
 
       const queryId = Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9);
-      setContext(contextData);
-      setActiveTabIdx(0);
-      setActiveQueryId(queryId);
 
       // Save to history (allowing duplicate queries to coexist in history list)
       setHistory((prevHistory) => {
@@ -225,9 +273,14 @@ function App() {
           context: contextData,
         };
         const updated = [newItem, ...prevHistory];
-        localStorage.setItem("context_agent_history", JSON.stringify(updated));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
         return updated;
       });
+
+      // Open it as a new project tab and focus it
+      setOpenProjectIds((prev) => (prev.includes(queryId) ? prev : [...prev, queryId]));
+      setActiveProjectId(queryId);
+      setActiveTabIdx(0);
 
       showToast("¡Contexto de desarrollo generado exitosamente!");
     } catch (err: any) {
@@ -249,66 +302,77 @@ function App() {
   };
 
   const handleToggleFeature = (featureId: string) => {
-    if (!context) return;
+    if (!context || !activeProjectId) return;
 
-    const updatedComponents = context.components.map((comp) => ({
-      ...comp,
-      features: comp.features.map((feat) =>
-        feat.id === featureId ? { ...feat, completed: !feat.completed } : feat
-      ),
-    }));
-
-    const updatedContext = {
+    const updatedContext: InteractiveContext = {
       ...context,
-      components: updatedComponents,
+      components: context.components.map((comp) => ({
+        ...comp,
+        features: comp.features.map((feat) =>
+          feat.id === featureId ? { ...feat, completed: !feat.completed } : feat
+        ),
+      })),
     };
 
-    setContext(updatedContext);
+    // History is the single source of truth; the active tab is derived from it
+    setHistory((prevHistory) => {
+      const updated = prevHistory.map((item) =>
+        item.id === activeProjectId ? { ...item, context: updatedContext } : item
+      );
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
 
-    // Persist the updated checklist state to history using the unique ID
-    if (activeQueryId) {
-      setHistory((prevHistory) => {
-        const updated = prevHistory.map((item) => {
-          if (item.id === activeQueryId) {
-            return {
-              ...item,
-              context: updatedContext,
-            };
-          }
-          return item;
-        });
-        localStorage.setItem("context_agent_history", JSON.stringify(updated));
-        return updated;
-      });
-    }
+  /** Focus a project tab, opening it first if it isn't open yet. */
+  const openProject = (id: string) => {
+    const item = history.find((h) => h.id === id);
+    if (!item) return;
+    setOpenProjectIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setActiveProjectId(id);
+    setActiveTabIdx(0);
+    setSelectedBranch(item.branch);
+    setSelectedHldPath(item.hldPath);
   };
 
   const handleLoadHistoryItem = (item: HistoryItem) => {
-    setSelectedBranch(item.branch);
-    setSelectedHldPath(item.hldPath);
-    setContext(item.context);
-    setActiveTabIdx(0);
-    setActiveQueryId(item.id);
-    showToast("Consulta cargada del historial");
+    openProject(item.id);
+    showToast("Proyecto abierto en una pestaña");
+  };
+
+  const handleCloseProjectTab = (id: string) => {
+    const closedIdx = openProjectIds.indexOf(id);
+    const remaining = openProjectIds.filter((tabId) => tabId !== id);
+    setOpenProjectIds(remaining);
+
+    if (activeProjectId === id) {
+      const fallback = remaining[closedIdx] ?? remaining[closedIdx - 1] ?? remaining[0] ?? null;
+      setActiveProjectId(fallback);
+      setActiveTabIdx(0);
+      const fallbackItem = fallback ? history.find((h) => h.id === fallback) : undefined;
+      if (fallbackItem) {
+        setSelectedBranch(fallbackItem.branch);
+        setSelectedHldPath(fallbackItem.hldPath);
+      }
+    }
   };
 
   const handleDeleteHistoryItem = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setHistory((prevHistory) => {
       const updated = prevHistory.filter((item) => item.id !== id);
-      localStorage.setItem("context_agent_history", JSON.stringify(updated));
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
       return updated;
     });
-    if (activeQueryId === id) {
-      setActiveQueryId(null);
-    }
+    handleCloseProjectTab(id);
     showToast("Consulta eliminada del historial");
   };
 
   const handleClearHistory = () => {
     setHistory([]);
-    localStorage.removeItem("context_agent_history");
-    setActiveQueryId(null);
+    localStorage.removeItem(HISTORY_KEY);
+    setOpenProjectIds([]);
+    setActiveProjectId(null);
     showToast("Historial limpio");
   };
 
@@ -357,7 +421,7 @@ function App() {
               {history.map((item) => (
                 <div
                   key={item.id}
-                  className={`history-item-card ${activeQueryId === item.id ? "active" : ""}`}
+                  className={`history-item-card ${activeProjectId === item.id ? "active" : ""}`}
                   onClick={() => handleLoadHistoryItem(item)}
                   style={{
                     display: "flex",
@@ -366,14 +430,14 @@ function App() {
                     padding: "12px 16px",
                     borderRadius: "12px",
                     background: "var(--glass-bg)",
-                    border: activeQueryId === item.id ? "1px solid hsl(var(--primary))" : "1px solid var(--glass-border)",
+                    border: activeProjectId === item.id ? "1px solid hsl(var(--primary))" : "1px solid var(--glass-border)",
                     cursor: "pointer",
                     transition: "var(--transition-fast)",
-                    boxShadow: activeQueryId === item.id ? "0 0 10px hsl(var(--primary) / 0.1)" : "none"
+                    boxShadow: activeProjectId === item.id ? "0 0 10px hsl(var(--primary) / 0.1)" : "none"
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeQueryId === item.id ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: activeProjectId === item.id ? "hsl(var(--primary))" : "hsl(var(--fg-app) / 0.8)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                       {item.branch}
                     </span>
                     <span style={{ fontSize: "0.80rem", color: "hsl(var(--fg-app) / 0.5)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
@@ -410,6 +474,14 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Open project tabs (multi-project workspace) */}
+        <ProjectTabs
+          projects={openProjects}
+          activeId={activeProjectId}
+          onSelect={openProject}
+          onClose={handleCloseProjectTab}
+        />
 
         {/* Animated generation progress + skeleton placeholder */}
         {isLoading && (
@@ -504,9 +576,9 @@ function App() {
                 </div>
 
                 {/* Render Selected Component Card */}
-                {context.components[activeTabIdx] && (
+                {(context.components[activeTabIdx] ?? context.components[0]) && (
                   <ComponentCard
-                    component={context.components[activeTabIdx]}
+                    component={context.components[activeTabIdx] ?? context.components[0]}
                     onToggleFeature={handleToggleFeature}
                     onShowToast={showToast}
                   />
