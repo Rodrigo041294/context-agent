@@ -1,12 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { Header } from "./components/Header";
 import { InputForm } from "./components/InputForm";
-import { WorkstreamCard } from "./components/WorkstreamCard";
+import { ComponentCard } from "./components/ComponentCard";
 import { ExportPanel } from "./components/ExportPanel";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { GenerationProgress, type GenerationPhase } from "./components/GenerationProgress";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
-import type { InteractiveContext, GeneratedContext, Task, HistoryItem } from "./types";
+import type {
+  InteractiveContext,
+  InteractiveComponent,
+  GeneratedContext,
+  HistoryItem,
+} from "./types";
+import { componentStats } from "./utils";
 import { createJob, pollJobUntilDone } from "./services/jobs";
 
 function App() {
@@ -36,7 +42,16 @@ function App() {
     const savedHistory = localStorage.getItem("context_agent_history");
     if (savedHistory) {
       try {
-        setHistory(JSON.parse(savedHistory));
+        const parsed: HistoryItem[] = JSON.parse(savedHistory);
+        // Drop entries saved with the old workstreams schema so the new
+        // components/features UI never receives an incompatible shape.
+        const compatible = Array.isArray(parsed)
+          ? parsed.filter((item) => Array.isArray(item?.context?.components))
+          : [];
+        setHistory(compatible);
+        if (compatible.length !== parsed.length) {
+          localStorage.setItem("context_agent_history", JSON.stringify(compatible));
+        }
       } catch (e) {
         console.warn("Failed to parse history", e);
       }
@@ -171,25 +186,28 @@ function App() {
         throw new Error("La API devolvió un formato de respuesta inválido.");
       }
 
-      // Convert to interactive context structure
-      const interactiveWorkstreams = (parsedContext.workstreams || []).map((ws, wsIndex) => {
-        const tasks: Task[] = (ws.tasks || []).map((taskText, taskIndex) => ({
-          id: `task-${wsIndex}-${taskIndex}`,
-          description: taskText,
-          completed: false,
-        }));
-
-        return {
-          area: ws.area,
-          specification: ws.specification,
-          tasks,
-        };
-      });
+      // Convert to interactive context structure (project -> components -> features).
+      // Features are the checkable unit; acceptance criteria stay informational.
+      const interactiveComponents: InteractiveComponent[] = (parsedContext.components || []).map(
+        (comp, ci) => ({
+          name: comp.name,
+          title: comp.title,
+          description: comp.description,
+          features: (comp.features || []).map((feat, fi) => ({
+            id: `c${ci}-f${fi}`,
+            name: feat.name,
+            title: feat.title,
+            description: feat.description,
+            acceptance: feat.acceptance || [],
+            completed: false,
+          })),
+        })
+      );
 
       const contextData: InteractiveContext = {
         projectName: parsedContext.project_name,
         implementationGoal: parsedContext.implementation_goal,
-        workstreams: interactiveWorkstreams,
+        components: interactiveComponents,
       };
 
       const queryId = Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9);
@@ -230,27 +248,24 @@ function App() {
     }
   };
 
-  const handleToggleTask = (taskId: string) => {
+  const handleToggleFeature = (featureId: string) => {
     if (!context) return;
 
-    const updatedWorkstreams = context.workstreams.map((ws) => {
-      const updatedTasks = ws.tasks.map((task) => {
-        if (task.id === taskId) {
-          return { ...task, completed: !task.completed };
-        }
-        return task;
-      });
-      return { ...ws, tasks: updatedTasks };
-    });
+    const updatedComponents = context.components.map((comp) => ({
+      ...comp,
+      features: comp.features.map((feat) =>
+        feat.id === featureId ? { ...feat, completed: !feat.completed } : feat
+      ),
+    }));
 
     const updatedContext = {
       ...context,
-      workstreams: updatedWorkstreams,
+      components: updatedComponents,
     };
 
     setContext(updatedContext);
 
-    // Save updated task checklist state to history using the unique ID
+    // Persist the updated checklist state to history using the unique ID
     if (activeQueryId) {
       setHistory((prevHistory) => {
         const updated = prevHistory.map((item) => {
@@ -441,7 +456,7 @@ function App() {
               <ExportPanel
                 projectName={context.projectName}
                 implementationGoal={context.implementationGoal}
-                workstreams={context.workstreams}
+                components={context.components}
                 onShowToast={showToast}
               />
             </div>
@@ -455,13 +470,11 @@ function App() {
             {/* Grid vs Tabs Rendering */}
             {viewMode === "grid" ? (
               <div className="workstreams-grid">
-                {context.workstreams.map((ws, index) => (
-                  <WorkstreamCard
+                {context.components.map((component, index) => (
+                  <ComponentCard
                     key={index}
-                    area={ws.area}
-                    specification={ws.specification}
-                    tasks={ws.tasks}
-                    onToggleTask={handleToggleTask}
+                    component={component}
+                    onToggleFeature={handleToggleFeature}
                     onShowToast={showToast}
                   />
                 ))}
@@ -470,9 +483,8 @@ function App() {
               <div className="tabs-view-container">
                 {/* Tabs Navigation Row */}
                 <div className="tabs-navigation" data-testid="tabs-navigation">
-                  {context.workstreams.map((ws, index) => {
-                    const completed = ws.tasks.filter((t) => t.completed).length;
-                    const total = ws.tasks.length;
+                  {context.components.map((component, index) => {
+                    const { done, total } = componentStats(component);
                     return (
                       <button
                         key={index}
@@ -480,10 +492,10 @@ function App() {
                         className={`tab-btn ${activeTabIdx === index ? "active" : ""}`}
                         onClick={() => setActiveTabIdx(index)}
                       >
-                        {ws.area}
+                        {component.title}
                         {total > 0 && (
                           <span className="tab-badge">
-                            {completed}/{total}
+                            {done}/{total}
                           </span>
                         )}
                       </button>
@@ -491,13 +503,11 @@ function App() {
                   })}
                 </div>
 
-                {/* Render Selected Workstream Card */}
-                {context.workstreams[activeTabIdx] && (
-                  <WorkstreamCard
-                    area={context.workstreams[activeTabIdx].area}
-                    specification={context.workstreams[activeTabIdx].specification}
-                    tasks={context.workstreams[activeTabIdx].tasks}
-                    onToggleTask={handleToggleTask}
+                {/* Render Selected Component Card */}
+                {context.components[activeTabIdx] && (
+                  <ComponentCard
+                    component={context.components[activeTabIdx]}
+                    onToggleFeature={handleToggleFeature}
                     onShowToast={showToast}
                   />
                 )}

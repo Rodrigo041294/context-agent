@@ -1,55 +1,69 @@
 import React from "react";
 import { Copy, FileText, Download } from "lucide-react";
-import type { InteractiveWorkstream } from "../types";
+import type { InteractiveComponent } from "../types";
 
 interface ExportPanelProps {
   projectName: string;
   implementationGoal: string;
-  workstreams: InteractiveWorkstream[];
+  components: InteractiveComponent[];
   onShowToast: (message: string) => void;
 }
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({
   projectName,
   implementationGoal,
-  workstreams,
+  components,
   onShowToast,
 }) => {
-  
   const generateMarkdown = (): string => {
     let md = `# ${projectName}\n\n`;
     md += `## Objetivo de Implementación\n${implementationGoal}\n\n`;
-    md += `## Workstreams\n\n`;
+    md += `## Componentes\n\n`;
 
-    workstreams.forEach((ws) => {
-      md += `### ${ws.area}\n`;
-      md += `${ws.specification}\n\n`;
-      md += `#### Tareas\n`;
-      ws.tasks.forEach((task) => {
-        md += `- [${task.completed ? "x" : " "}] ${task.description}\n`;
+    components.forEach((component) => {
+      md += `### ${component.title}`;
+      if (component.name) md += ` (\`${component.name}\`)`;
+      md += `\n${component.description}\n\n`;
+
+      component.features.forEach((feature) => {
+        md += `#### [${feature.completed ? "x" : " "}] ${feature.title}\n`;
+        if (feature.description) md += `${feature.description}\n\n`;
+        if (feature.acceptance.length > 0) {
+          md += `**Criterios de aceptación:**\n`;
+          feature.acceptance.forEach((criterion) => {
+            md += `- ${criterion}\n`;
+          });
+        }
+        md += `\n`;
       });
-      md += `\n---\n\n`;
+
+      md += `---\n\n`;
     });
 
     return md.trim();
   };
 
   const handleCopyAll = () => {
-    const md = generateMarkdown();
-    navigator.clipboard.writeText(md);
+    navigator.clipboard.writeText(generateMarkdown());
     onShowToast("Contexto copiado como Markdown al portapapeles");
   };
 
-  const handleExportMarkdown = () => {
-    const md = generateMarkdown();
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
+  const downloadFile = (content: string, extension: string, mime: string) => {
+    const blob = new Blob([content], { type: `${mime};charset=utf-8;` });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `${projectName.toLowerCase().replace(/\s+/g, "_")}_context.md`);
+    link.setAttribute(
+      "download",
+      `${projectName.toLowerCase().replace(/\s+/g, "_")}_context.${extension}`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleExportMarkdown = () => {
+    downloadFile(generateMarkdown(), "md", "text/markdown");
     onShowToast("Archivo Markdown descargado");
   };
 
@@ -57,25 +71,21 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
     const rawData = {
       projectName,
       implementationGoal,
-      workstreams: workstreams.map((ws) => ({
-        area: ws.area,
-        specification: ws.specification,
-        tasks: ws.tasks.map((t) => ({
-          description: t.description,
-          completed: t.completed,
+      components: components.map((component) => ({
+        name: component.name,
+        title: component.title,
+        description: component.description,
+        features: component.features.map((feature) => ({
+          name: feature.name,
+          title: feature.title,
+          description: feature.description,
+          completed: feature.completed,
+          acceptance: feature.acceptance,
         })),
       })),
     };
 
-    const json = JSON.stringify(rawData, null, 2);
-    const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `${projectName.toLowerCase().replace(/\s+/g, "_")}_context.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadFile(JSON.stringify(rawData, null, 2), "json", "application/json");
     onShowToast("Archivo JSON descargado");
   };
 

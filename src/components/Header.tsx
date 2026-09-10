@@ -17,7 +17,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
           </div>
           <div>
             <h1 className="gradient-text">Development Context Agent</h1>
-            <p className="subtitle">Capacidad 3 · Generación automática de workstreams desde HLD</p>
+            <p className="subtitle">Capacidad 3 · Generación automática de componentes y features desde HLD</p>
           </div>
         </div>
         

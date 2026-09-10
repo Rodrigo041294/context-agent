@@ -588,6 +588,137 @@ body {
   color: hsl(var(--fg-app) / 0.45);
 }
 
+/* Component card — name chip + features */
+.component-card-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.component-card-name {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: hsl(var(--fg-app) / 0.45);
+}
+
+.features-count {
+  color: hsl(var(--fg-app) / 0.45);
+  font-weight: 600;
+}
+
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-hint {
+  font-size: 0.85rem;
+  color: hsl(var(--fg-app) / 0.5);
+  font-style: italic;
+}
+
+/* Feature block — collapsible group inside a component card, feature = checkable unit */
+.feature-block {
+  border: 1px solid hsl(var(--card-border) / 0.6);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: hsl(var(--bg-app) / 0.25);
+  transition: var(--transition-fast);
+}
+
+.feature-block.is-completed {
+  border-color: hsl(var(--success) / 0.4);
+  background: hsl(var(--success) / 0.05);
+}
+
+.feature-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+  flex: 1;
+}
+
+.feature-toggle .task-checkbox {
+  flex-shrink: 0;
+}
+
+.feature-block.is-completed .task-checkbox {
+  background: hsl(var(--success));
+  border-color: hsl(var(--success));
+  color: white;
+}
+
+.feature-title {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  font-weight: 700;
+  color: hsl(var(--fg-app) / 0.9);
+  transition: var(--transition-fast);
+}
+
+.feature-block.is-completed .feature-title {
+  text-decoration: line-through;
+  color: hsl(var(--fg-app) / 0.5);
+}
+
+.feature-chevron {
+  flex-shrink: 0;
+  color: hsl(var(--fg-app) / 0.45);
+  transition: transform 0.2s ease;
+}
+
+.feature-chevron.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.feature-desc {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: hsl(var(--fg-app) / 0.65);
+  margin: 10px 0 0;
+}
+
+/* Acceptance criteria — read-only "puntos a considerar" */
+.acceptance-title {
+  font-family: var(--font-title);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: hsl(var(--fg-app) / 0.5);
+  margin: 14px 0 8px;
+}
+
+.acceptance-list {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acceptance-list li {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: hsl(var(--fg-app) / 0.75);
+}
+
+.acceptance-list li::marker {
+  color: hsl(var(--primary) / 0.6);
+}
+
 /* Messages Status (Error, Warning, Success) */
 .status-banner {
   display: flex;

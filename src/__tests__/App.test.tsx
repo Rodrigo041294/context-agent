@@ -48,10 +48,25 @@ const completedJob = (ctx: any) => ({
   generatedContext: JSON.stringify(ctx),
 });
 
+// Helpers to build the project -> components -> features -> acceptance shape.
+const feat = (title: string, acceptance: string[], id: number = 1) => ({
+  id,
+  name: title.toLowerCase().replace(/\s+/g, "_"),
+  title,
+  description: `${title} description`,
+  acceptance,
+});
+const comp = (title: string, features: any[], name = "") => ({
+  name: name || title.toLowerCase().replace(/\s+/g, "_"),
+  title,
+  description: `${title} description`,
+  features,
+});
+
 const DEFAULT_CONTEXT = {
   project_name: "Default Project",
   implementation_goal: "Default goal",
-  workstreams: [{ area: "Default Area", specification: "Default spec", tasks: ["Default task"] }],
+  components: [comp("Default Component", [feat("Default Feature", ["Default criterion"])])],
 };
 
 describe("Context Agent UI Application", () => {
@@ -202,21 +217,18 @@ describe("Context Agent UI Application", () => {
     expect(hldInput.value).toBe("docs/hld.md");
   });
 
-  it("should create a job, poll it and render the generated context workstreams on success", async () => {
+  it("should create a job, poll it and render the generated components/features on success", async () => {
     mockJob = completedJob({
       project_name: "Premium Test Project",
       implementation_goal: "Build a state-of-the-art context tool",
-      workstreams: [
-        {
-          area: "Frontend Refactoring",
-          specification: "Migrate all views from standard HTML to React functional components.",
-          tasks: ["Configure Vite", "Write index.css tokens", "Validate responsive views"],
-        },
-        {
-          area: "CI/CD Setup",
-          specification: "Establish pipeline and code coverage limits.",
-          tasks: ["Configure SonarQube properties", "Add coverage script to package.json"],
-        },
+      components: [
+        comp("Frontend Refactoring", [
+          feat("Migrate views", ["Configure Vite", "Write index.css tokens"], 1),
+          feat("Responsive QA", ["Validate responsive views"], 2),
+        ]),
+        comp("CI/CD Setup", [
+          feat("Pipeline", ["Configure SonarQube properties", "Add coverage script"], 1),
+        ]),
       ],
     });
 
@@ -257,17 +269,21 @@ describe("Context Agent UI Application", () => {
       hld_path: "hld.md",
     });
 
-    const wsHeader = screen.getByRole("heading", { name: "Frontend Refactoring" });
+    const compHeader = screen.getByRole("heading", { name: "Frontend Refactoring" });
     expect(screen.getByText("Configure Vite")).toBeInTheDocument();
-    fireEvent.click(wsHeader);
+    fireEvent.click(compHeader);
     expect(screen.queryByText("Configure Vite")).not.toBeInTheDocument();
-    fireEvent.click(wsHeader);
+    fireEvent.click(compHeader);
     expect(screen.getByText("Configure Vite")).toBeInTheDocument();
 
-    const taskItem = screen.getByTestId("task-item-task-0-0");
-    expect(taskItem).not.toHaveClass("is-completed");
-    fireEvent.click(taskItem);
-    expect(taskItem).toHaveClass("is-completed");
+    // Feature titles render; acceptance criteria show as read-only bullets
+    expect(screen.getByRole("heading", { name: "Migrate views" })).toBeInTheDocument();
+    expect(screen.getByText("Configure Vite").tagName).toBe("LI");
+
+    // The feature is the checkable unit
+    expect(screen.getAllByTestId("feature-block")[0]).not.toHaveClass("is-completed");
+    fireEvent.click(screen.getByTestId("feature-toggle-c0-f0"));
+    expect(screen.getAllByTestId("feature-block")[0]).toHaveClass("is-completed");
 
     const copySingleBtn = screen.getAllByRole("button", { name: /Copiar texto/i })[0];
     fireEvent.click(copySingleBtn);
@@ -379,9 +395,9 @@ describe("Context Agent UI Application", () => {
     mockJob = completedJob({
       project_name: "Tab and Grid Test",
       implementation_goal: "Verify tab switching works correctly",
-      workstreams: [
-        { area: "Area One", specification: "Specs for area one", tasks: ["Task 1A"] },
-        { area: "Area Two", specification: "Specs for area two", tasks: ["Task 2A"] },
+      components: [
+        comp("Area One", [feat("Feature 1A", ["Criterion 1A"])]),
+        comp("Area Two", [feat("Feature 2A", ["Criterion 2A"])]),
       ],
     });
 
@@ -428,7 +444,7 @@ describe("Context Agent UI Application", () => {
     mockJob = completedJob({
       project_name: "Cache Test Project",
       implementation_goal: "Verify cache bypasses api",
-      workstreams: [{ area: "Cached Area", specification: "Cached Spec", tasks: ["Cached Task"] }],
+      components: [comp("Cached Area", [feat("Cached Feature", ["Cached criterion"])])],
     });
 
     render(<App />);
@@ -476,9 +492,9 @@ describe("Context Agent UI Application", () => {
     expect(screen.getByText("Cache Test Project")).toBeInTheDocument();
     expect(jobsCalls().length).toBe(0);
 
-    const taskItem = screen.getByTestId("task-item-task-0-0");
-    fireEvent.click(taskItem);
-    expect(taskItem).toHaveClass("is-completed");
+    const featureToggle = screen.getByTestId("feature-toggle-c0-f0");
+    fireEvent.click(featureToggle);
+    expect(screen.getByTestId("feature-block")).toHaveClass("is-completed");
 
     const deleteBtns = screen.getAllByRole("button", { name: /Eliminar consulta/i });
     expect(deleteBtns.length).toBe(2);
@@ -493,7 +509,7 @@ describe("Context Agent UI Application", () => {
     mockJob = completedJob({
       project_name: "Clear Test Project",
       implementation_goal: "Verify clear history works",
-      workstreams: [{ area: "Clear Area", specification: "Clear Spec", tasks: ["Clear Task"] }],
+      components: [comp("Clear Area", [feat("Clear Feature", ["Clear criterion"])])],
     });
     fireEvent.change(branchInput, { target: { value: "main" } });
     fireEvent.change(hldInput, { target: { value: "clear-hld.md" } });
@@ -508,7 +524,7 @@ describe("Context Agent UI Application", () => {
     mockJob = completedJob({
       project_name: "Toggle Test",
       implementation_goal: "goal",
-      workstreams: [{ area: "A", specification: "s", tasks: ["t"] }],
+      components: [comp("A", [feat("F", ["t"])])],
     });
 
     render(<App />);
@@ -551,7 +567,7 @@ describe("Context Agent UI Application", () => {
     mockJob = completedJob({
       project_name: "Cognito Auth Test",
       implementation_goal: "Verify token flow",
-      workstreams: [{ area: "Auth Area", specification: "Specs", tasks: ["Task 1"] }],
+      components: [comp("Auth Area", [feat("Auth Feature", ["Auth criterion"])])],
     });
 
     render(<App />);

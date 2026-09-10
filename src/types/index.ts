@@ -1,31 +1,57 @@
-export interface Task {
-  id: string;
+// ---------------------------------------------------------------------------
+// Raw shape returned by the jobs API inside `generatedContext` (a JSON string).
+// The API now organises the work as project -> components -> features, and each
+// feature carries its acceptance criteria.
+// ---------------------------------------------------------------------------
+
+export interface Feature {
+  id: number | string;
+  name: string;
+  title: string;
   description: string;
-  completed: boolean;
+  acceptance: string[];
 }
 
-export interface Workstream {
-  area: string;
-  specification: string;
-  tasks: string[];
-}
-
-export interface InteractiveWorkstream {
-  area: string;
-  specification: string;
-  tasks: Task[];
+export interface Component {
+  name: string;
+  title: string;
+  description: string;
+  features: Feature[];
 }
 
 export interface GeneratedContext {
   project_name: string;
   implementation_goal: string;
-  workstreams: Workstream[];
+  components: Component[];
+}
+
+// ---------------------------------------------------------------------------
+// Interactive shape used by the UI: a *feature* is the checkable unit so
+// progress can be tracked and persisted per query. Acceptance criteria are
+// shown as read-only "puntos a considerar".
+// ---------------------------------------------------------------------------
+
+export interface InteractiveFeature {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  /** Acceptance criteria — informational bullet list, not a checklist. */
+  acceptance: string[];
+  completed: boolean;
+}
+
+export interface InteractiveComponent {
+  name: string;
+  title: string;
+  description: string;
+  features: InteractiveFeature[];
 }
 
 export interface InteractiveContext {
   projectName: string;
   implementationGoal: string;
-  workstreams: InteractiveWorkstream[];
+  components: InteractiveComponent[];
 }
 
 export interface ApiPayload {
